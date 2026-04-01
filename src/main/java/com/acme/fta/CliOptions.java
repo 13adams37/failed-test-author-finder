@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public record CliOptions(Path repo, List<String> reportGlobs, int top, Path outFile, boolean help) {
+public record CliOptions(Path repo, List<String> reportGlobs, int top, Path outFile, boolean debug, boolean help) {
     private static final String DEFAULT_REPORTS = "**/build/test-results/**/*.xml";
 
     public static CliOptions parse(String[] args) {
@@ -13,6 +13,7 @@ public record CliOptions(Path repo, List<String> reportGlobs, int top, Path outF
         List<String> reportGlobs = new ArrayList<>(List.of(DEFAULT_REPORTS));
         int top = 3;
         Path outFile = null;
+        boolean debug = false;
         boolean help = false;
 
         for (int i = 0; i < args.length; i++) {
@@ -23,11 +24,12 @@ public record CliOptions(Path repo, List<String> reportGlobs, int top, Path outF
                 case "--reports" -> reportGlobs = splitCsv(requireValue(args, ++i, arg));
                 case "--top" -> top = parseTop(requireValue(args, ++i, arg));
                 case "--out" -> outFile = Path.of(requireValue(args, ++i, arg));
+                case "--debug", "-d" -> debug = true;
                 default -> throw new IllegalArgumentException("Unknown argument: " + arg);
             }
         }
 
-        return new CliOptions(repo, reportGlobs, top, outFile, help);
+        return new CliOptions(repo, reportGlobs, top, outFile, debug, help);
     }
 
     private static int parseTop(String value) {
@@ -69,6 +71,7 @@ public record CliOptions(Path repo, List<String> reportGlobs, int top, Path outF
                                      Default: **/build/test-results/**/*.xml
                   --top <N>          Number of top authors to print. Default: 3
                   --out <file>       Write text report to file instead of stdout
+                  --debug, -d        Print step-by-step progress to stderr
                   --help, -h         Show this help
                 """;
     }

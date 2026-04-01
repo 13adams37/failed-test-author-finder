@@ -1,6 +1,6 @@
 # failed-test-author-finder
 
-Простой standalone CLI на Java 17, который:
+Простой standalone CLI на Java 24, который:
 - читает готовые JUnit XML отчёты;
 - находит упавшие тесты;
 - ищет исходный Java-файл теста по FQCN;
@@ -14,6 +14,7 @@
 - fallback на диапазон класса, если метод не найден
 - top-N авторов по доле строк из `git blame`
 - вывод в stdout или в текстовый файл
+- debug-режим с пошаговым логом в `stderr`
 
 ## Ограничения
 - Это **best effort**, а не абсолютная истина.
@@ -42,11 +43,22 @@ java -jar build/libs/failed-test-author-finder-1.0.0.jar \
   --out failed-test-authors.txt
 ```
 
+С debug-логом:
+```bash
+java -jar build/libs/failed-test-author-finder-1.0.0.jar \
+  --repo /path/to/repo \
+  --debug \
+  --out failed-test-authors.txt
+```
+
+`--debug` пишет пошаговый прогресс в `stderr`, поэтому текстовый отчёт не засоряется. Если хочешь и лог, и отчёт в одном файле, перенаправляй `2>&1` сам.
+
 ## Параметры
 - `--repo <path>` — путь до git-репозитория. По умолчанию `.`
 - `--reports <glob1,glob2,...>` — glob-паттерны для XML-отчётов. По умолчанию `**/build/test-results/**/*.xml`
 - `--top <N>` — сколько авторов показывать на тест. По умолчанию `3`
 - `--out <file>` — файл для текстового отчёта. Если не задан, печатает в stdout
+- `--debug` / `-d` — печатает пошаговый debug-лог в stderr
 - `--help` — краткая справка
 
 ## Формат отчёта

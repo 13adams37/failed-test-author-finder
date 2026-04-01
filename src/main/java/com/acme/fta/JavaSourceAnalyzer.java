@@ -19,13 +19,19 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 
 public final class JavaSourceAnalyzer {
+    private final DebugLogger debug;
+
+    public JavaSourceAnalyzer(DebugLogger debug) {
+        this.debug = debug;
+    }
+
     public RangeMatch findBestRange(Path sourceFile, String fqcn, String testName) throws IOException {
+        debug.log("parsing Java source: %s", sourceFile);
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             throw new IllegalStateException("JDK compiler is not available. Run on a full JDK, not a JRE.");
@@ -42,7 +48,21 @@ public final class JavaSourceAnalyzer {
             String normalizedRequestedFqcn = fqcn.replace('$', '.');
             Collector collector = new Collector(trees, unit, normalizedRequestedFqcn);
             collector.scan(unit, null);
-            return collector.pickBestMatch(testName);
+            RangeMatch match = collector.pickBestMatch(testName);
+            if (match == null) {
+                debug.log("no source range match for %s#%s", fqcn, testName);
+            } else {
+                debug.log("source range match for %s#%s => scope=%s confidence=%s lines=%d-%d matchedName=%s methods=%d",
+                        fqcn,
+                        testName,
+                        match.scope(),
+                        match.confidence(),
+                        match.startLine(),
+                        match.endLine(),
+                        match.matchedName(),
+                        collector.methodCount());
+            }
+            return match;
         }
     }
 
@@ -73,6 +93,10 @@ public final class JavaSourceAnalyzer {
             this.trees = trees;
             this.unit = unit;
             this.requestedFqcn = requestedFqcn;
+        }
+
+        private int methodCount() {
+            return methods.size();
         }
 
         @Override

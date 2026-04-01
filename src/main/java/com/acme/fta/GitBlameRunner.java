@@ -15,11 +15,16 @@ import java.util.Map;
 public final class GitBlameRunner {
     private final Path repo;
     private final Path ignoreRevsFile;
+    private final DebugLogger debug;
 
-    public GitBlameRunner(Path repo) {
+    public GitBlameRunner(Path repo, DebugLogger debug) {
         this.repo = repo;
+        this.debug = debug;
         Path candidate = repo.resolve(".git-blame-ignore-revs");
         this.ignoreRevsFile = Files.exists(candidate) ? candidate : null;
+        if (ignoreRevsFile != null) {
+            debug.log("using .git-blame-ignore-revs: %s", ignoreRevsFile);
+        }
     }
 
     public List<AuthorContribution> blame(Path sourceFile, int startLine, int endLine, int top) throws IOException, InterruptedException {
@@ -42,6 +47,7 @@ public final class GitBlameRunner {
         cmd.add("--");
         cmd.add(relative.toString());
 
+        debug.log("running git blame: %s", String.join(" ", cmd));
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process process = pb.start();
@@ -49,6 +55,7 @@ public final class GitBlameRunner {
         Map<AuthorKey, Integer> linesByAuthor = new HashMap<>();
         String currentAuthor = "unknown";
         String currentEmail = "unknown";
+        int blamedLines = 0;
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
@@ -60,11 +67,22 @@ public final class GitBlameRunner {
                 } else if (line.startsWith("\t")) {
                     AuthorKey key = new AuthorKey(currentAuthor, currentEmail);
                     linesByAuthor.merge(key, 1, Integer::sum);
+                    blamedLines++;
+                    if (blamedLines % 200 == 0) {
+                        debug.log("git blame progress for %s:%d-%d => %d line(s)", relative, startLine, endLine, blamedLines);
+                    }
                 }
             }
         }
 
         int exit = process.waitFor();
+        debug.log("git blame finished for %s:%d-%d exit=%d blamedLines=%d authors=%d",
+                relative,
+                startLine,
+                endLine,
+                exit,
+                blamedLines,
+                linesByAuthor.size());
         if (exit != 0) {
             throw new IOException("git blame returned non-zero exit code: " + exit);
         }
@@ -74,7 +92,7 @@ public final class GitBlameRunner {
             return List.of();
         }
 
-        return linesByAuthor.entrySet().stream()
+        List<AuthorContribution> authors = linesByAuthor.entrySet().stream()
                 .map(entry -> new AuthorContribution(
                         entry.getKey().name(),
                         entry.getKey().email(),
@@ -85,6 +103,16 @@ public final class GitBlameRunner {
                         .thenComparing(AuthorContribution::name))
                 .limit(top)
                 .toList();
+
+        for (AuthorContribution author : authors) {
+            debug.log("top author candidate: %s <%s> score=%.4f lines=%d/%d",
+                    author.name(),
+                    author.email(),
+                    author.score(),
+                    author.lines(),
+                    author.totalLines());
+        }
+        return authors;
     }
 
     private String sanitizeEmail(String raw) {
